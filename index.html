@@ -216,6 +216,7 @@ const brl=v=>(v<-.5?'− ':'')+'R$ '+Math.abs(Math.round(v)).toLocaleString('pt-
 function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
 function ver(a){a.forEach(i=>{if(!S.vistos.includes(i))S.vistos.push(i);});}
 const cdbV=()=>S.cdb?S.cdb.v:0,liq=()=>S.conta+S.reserva+S.acoes,pat=()=>liq()+cdbV();
+const podeComprar=()=>!S.fim&&Math.round(liq())>=Math.round(S.obj.v);
 function paraCdb(f){const v=S.reserva*f;if(v<1)return 'Você não tinha reserva para aplicar. Nada mudou.';S.reserva-=v;S.cdb={v,m:0};
  return brl(v)+' saíram da reserva e foram para o CDB. Esse valor rende cerca de 0,96% ao mês, já com imposto, contra 0,85% da reserva, e só volta daqui a 12 meses. '+(f===1?'Sua reserva com saque imediato ficou em zero. Se surgir um imprevisto, a conta vai para o cheque especial.':'Você ainda tem '+brl(S.reserva)+' com saque imediato para imprevistos.');}
 function comp(){const meses=S.reserva/S.contas,div=Math.max(0,-S.conta);
@@ -260,7 +261,7 @@ function fecharMes(){const L=S.log,lz=Math.round(S.renda*.08);
  S.hist.push({m:S.mes,id:S.carta,i:S.res.i,t:CARTAS[S.carta].t,ok:S.res.ok,sorte:S.res.sorte,s:score(),p:pat()});
  S.fech={m:S.mes,L,mv:S.mv,sub};S.fase='fech';if(S.vermelho>=REF.max)S.fim='derrota';}
 function proximo(){if(S.fim){S.fase='fim';return;}S.mes++;S.conta+=S.renda-S.contas;abrirMes();puxar();}
-function comprar(){const v=S.obj.v;if(liq()<v)return;S.conta-=v;if(S.conta<0){const x=Math.min(S.reserva,-S.conta);S.reserva-=x;S.conta+=x;}if(S.conta<0){S.acoes+=S.conta;S.conta=0;}S.fim='vitoria';S.fase='fim';}
+function comprar(){if(!podeComprar())return;const v=Math.min(S.obj.v,liq());S.conta-=v;if(S.conta<0){const x=Math.min(S.reserva,-S.conta);S.reserva-=x;S.conta+=x;}if(S.conta<0){S.acoes+=S.conta;S.conta=0;}S.fim='vitoria';S.fase='fim';}
 
 /* ============ 3. INTERFACE ============ */
 const UI={p:null,o:null,nome:''};const K='primeiro-extrato-v3';
@@ -269,14 +270,14 @@ const salvar=()=>{try{localStorage.setItem(K,JSON.stringify(S));}catch(e){}};
 const T=(id,r)=>'<button class="termo" data-a="termo" data-k="'+id+'">'+r+'</button>';
 const I=id=>'<button class="chipb" data-a="termo" data-k="'+id+'">ⓘ '+GLOSS[id].t+'</button>';
 const ln=(a,b,n)=>'<div class="ln"><span>'+a+'</span><b class="'+(!n&&b<-.5?'neg':'')+'">'+(typeof b==='number'?(b>.5&&!n?'+ ':'')+brl(b):b)+'</b></div>';
-function ficha(){const s=score(),pr=Math.max(0,Math.min(100,pat()/S.obj.v*100)),pode=liq()>=S.obj.v&&!S.fim,prox=NIVEIS.slice().reverse().find(n=>n[0]>s);
+function ficha(){const s=score(),pr=Math.max(0,Math.min(100,Math.floor(pat()/S.obj.v*100))),pode=podeComprar(),travado=!pode&&!S.fim&&S.cdb&&Math.round(pat())>=Math.round(S.obj.v),prox=NIVEIS.slice().reverse().find(n=>n[0]>s);
  let h='<aside class="pn"><div class="ovr"><button class="n" data-a="saude" aria-label="Saúde financeira '+s+'. Ver como é calculada"><span>SAÚDE</span><b>'+s+'</b></button><div><span class="lb a">'+nivel(s)+'</span><h3>'+S.nome+'</h3><span class="sm mute">'+S.perfil+'</span></div></div>'+
- '<p class="sm mute" style="margin:.6rem 0 0">Saúde financeira é a nota de 30 a 99 da sua situação. '+(prox?'Faltam '+(prox[0]-s)+' pontos para '+prox[1]+'. ':'')+'</p><button class="chipb" data-a="saude">ⓘ Ver como a nota é calculada</button>'+
+ '<p class="sm mute" style="margin:.6rem 0 0">Saúde financeira é a nota de 30 a 99 da sua situação. O nome acima dela é o patamar atual. '+(prox?'Faltam '+(prox[0]-s)+' pontos para '+prox[1]+'. ':'')+'</p><button class="chipb" data-a="saude">ⓘ Ver como a nota é calculada</button>'+
  '<div class="st"><div><span class="lb">Conta</span><b class="'+(S.conta<0?'neg':'')+'">'+brl(S.conta)+'</b></div><div><span class="lb">Reserva</span><b>'+brl(S.reserva)+'</b></div><div><span class="lb">Ações</span><b>'+brl(S.acoes)+'</b></div>'+(S.cdb?'<div><span class="lb">CDB, preso '+(12-S.cdb.m)+' m</span><b>'+brl(S.cdb.v)+'</b></div>':'<div><span class="lb">Sobra mensal</span><b>'+brl(S.renda-S.contas)+'</b></div>')+'</div>'+
  '<p class="lb" style="margin-top:.8rem">Bem-estar '+Math.round(S.bem)+' de 100</p><div class="meter"><i style="width:'+S.bem+'%"></i></div><p class="sm mute" style="margin:0">Cai 10 por mês. O lazer repõe. Abaixo de 20, vira compra por impulso.</p>'+
  (S.vermelho?'<p class="sm neg"><b>'+S.vermelho+' de '+REF.max+' meses no vermelho.</b> No '+REF.max+'.º, a carreira acaba.</p>':'')+
- '<p class="lb" style="margin-top:.8rem">Objetivo</p><b>'+S.obj.n+'</b> <span class="sm mute">'+brl(S.obj.v)+'</span><div class="meter"><i style="width:'+pr+'%"></i></div><p class="sm mute">Você tem '+brl(pat())+' no total, '+Math.round(pr)+'% do preço.</p>'+
- (pode?'<button class="btn w" data-a="comprar">Comprar o objetivo</button>':'')+'</aside>';
+ '<p class="lb" style="margin-top:.8rem">Objetivo</p><b>'+S.obj.n+'</b> <span class="sm mute">'+brl(S.obj.v)+'</span><div class="meter"><i style="width:'+pr+'%"></i></div><p class="sm mute">Você tem '+brl(pat())+' no total, '+Math.round(pr)+'% do preço.</p>'+(pode?'<p class="sm"><b>Você já pode comprar o objetivo.</b></p>':'')+
+ (pode?'<button class="btn w" data-a="comprar">Comprar o objetivo</button>':'')+(travado?'<p class="sm neg">O total já cobre o preço, mas '+brl(S.cdb.v)+' estão presos no CDB por mais '+(12-S.cdb.m)+' meses. Para comprar agora, faltam '+brl(S.obj.v-liq())+' com saque imediato.</p>':'')+'</aside>';
  h+='<aside class="pn" style="margin-top:1rem"><span class="lb">Manual</span><p class="sm mute" style="margin:.2rem 0 .5rem">'+S.vistos.length+' conceitos já apareceram. Toque para rever.</p><div class="mlist">'+S.vistos.map(i=>'<button class="chipb" data-a="termo" data-k="'+i+'">'+GLOSS[i].t+'</button>').join('')+'</div><p style="margin:.8rem 0 0"><button class="chipb" data-a="regras">ⓘ Regras do jogo</button></p></aside>';
  return '<div>'+h+'</div>';}
 function linha(){let h='<aside class="pn"><table class="tl"><tr><th>Mês</th><th>Decisão</th><th>Saúde</th><th>Patrimônio</th></tr>';
@@ -316,7 +317,7 @@ function centro(){const c=CARTAS[S.carta];
  c.ops.forEach((o,i)=>{h+='<button class="op" data-a="decidir" data-k="'+i+'"><span class="t"><b>'+o.r+'</b></span></button>';});
  return h+'</div>';}
 function fim(){const v=S.fim==='vitoria',s=score(),er=S.hist.filter(h=>!CARTAS[h.id].m.includes(h.i)),az=S.hist.filter(h=>h.sorte&&!h.ok&&CARTAS[h.id].m.includes(h.i));
- let h='<div class="carta"><div class="tx" style="text-align:center;padding:2rem 1rem;border-bottom:1px solid var(--line)"><span class="lb a">Relatório da carreira</span><h1>'+(v?'Objetivo comprado':'Dívida fora de controle')+'</h1><p class="mute">'+(v?S.nome+' comprou '+S.obj.n.toLowerCase()+' em '+S.mes+' meses e encerra como '+nivel(s)+'.':'A conta fechou '+REF.max+' meses seguidos no vermelho. Com 8% ao mês, cada mês começa mais difícil que o anterior.')+'</p></div><div class="tx">'+
+ let h='<div class="carta"><div class="tx" style="text-align:center;padding:2rem 1rem;border-bottom:1px solid var(--line)"><span class="lb a">Relatório da carreira</span><h1>'+(v?'Objetivo comprado':'Dívida fora de controle')+'</h1><p class="mute">'+(v?S.nome+' comprou '+S.obj.n.toLowerCase()+' em '+S.mes+(S.mes===1?' mês':' meses')+'. A saúde financeira final foi de '+s+' pontos, o que corresponde ao patamar '+nivel(s)+'.':'A conta fechou '+REF.max+' meses seguidos no vermelho. Com 8% ao mês, cada mês começa mais difícil que o anterior.')+'</p></div><div class="tx">'+
  [['Meses jogados',S.mes+(S.mes===1?' mês':' meses')],['Saúde financeira final',s+', '+nivel(s)],['Decisões recomendadas',(S.hist.length-er.length)+' de '+S.hist.length],['Juros pagos ao banco',brl(S.juros)],['Rendimento dos investimentos',brl(S.rend)],['Perdido em golpe',brl(S.golpe)],['Inflação no preço do objetivo',brl(S.obj.v-S.obj.v0)]].map(l=>ln(l[0],l[1],1)).join('');
  h+='<p class="lb a" style="margin-top:1.2rem">O que você errou e o que deveria ter feito</p>';
  if(!er.length)h+='<p>Nenhuma decisão fugiu do recomendado.</p>';
